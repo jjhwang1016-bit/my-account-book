@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>미래지출 대비 재무 시뮬레이터</title>
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #f4f7ff;
+      --surface: #ffffff;
+      --line: #e4eaf6;
+      --text: #172033;
+      --sub: #65738c;
+      --primary: #2f6bff;
+      --good: #09a66d;
+      --warn: #f59e0b;
+      --bad: #ef4f5f;
+      --shadow: 0 10px 26px rgba(36, 59, 104, 0.1);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Pretendard", sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at top right, #e8eeff, var(--bg) 38%);
+    }
+    .hidden { display: none !important; }
+    .wrap { max-width: 1280px; margin: 0 auto; padding: 24px 16px 40px; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+    }
+    .muted { color: var(--sub); font-size: 13px; }
+
+    #login-screen { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
+    .login-box { width: min(580px, 100%); padding: 42px 28px; text-align: center; }
+    .login-box h1 { margin: 0 0 10px; font-size: 33px; }
+    .btn-primary {
+      border: none;
+      border-radius: 10px;
+      background: var(--primary);
+      color: #fff;
+      padding: 11px 14px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      min-height: 42px;
+      white-space: nowrap;
+    }
+    .btn-ghost {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .top { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 14px; }
+    .title-row { display: flex; align-items: center; gap: 8px; }
+    .title-row h1 { margin: 0; font-size: 29px; }
+
+    .kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .kpi { padding: 14px; }
+    .kpi p { margin: 0; color: var(--sub); font-size: 13px; }
+    .kpi h3 { margin: 7px 0 0; font-size: 23px; }
+
+    .actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .actions button {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      padding: 14px;
+      text-align: left;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .layout { display: grid; grid-template-columns: 1.3fr 1fr; gap: 12px; align-items: start; }
+    .section { padding: 16px; }
+    .section h2 { margin: 0 0 10px; font-size: 19px; }
+    .sub-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .input-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+    input, select { min-height: 42px; border: 1px solid var(--line); border-radius: 10px; padding: 10px; font-family: inherit; font-size: 14px; background: #fff; flex: 1; min-width: 120px; }
+
+    .pill { display: inline-block; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; }
+    .ok { background: rgba(9,166,109,.12); color: #0a8058; }
+    .warn { background: rgba(245,158,11,.16); color: #9f6406; }
+    .bad { background: rgba(239,79,95,.13); color: #ae1f35; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+    th { 
+      color: var(--sub); font-weight: 700; padding: 9px 6px; text-align: left;
+      position: sticky; top: 0; z-index: 10; 
+      box-shadow: inset 0 -1px 0 var(--line); border-bottom: none; 
+    }
+    td { border-bottom: 1px solid var(--line); padding: 9px 6px; text-align: left; word-break: break-all; }
+    .td-right { text-align: right; }
+    
+    .tr-total { background: rgba(0,0,0,0.03); font-weight: 800; border-top: 2px solid var(--line); }
+
+    th.sortable { cursor: pointer; user-select: none; transition: background 0.2s; }
+    th.sortable:hover { filter: brightness(0.96); }
+    .sort-icon { display: inline-block; width: 14px; text-align: center; margin-left: 2px; font-size: 11px; color: #a0aec0; }
+    .sort-icon.active { color: var(--primary); font-weight: 900; }
+
+    th.bg-avail { background-color: #f0fdf4; }
+    th.bg-tied { background-color: #f8fafc; }
+    th.bg-loan { background-color: #fef2f2; }
+    th.bg-mental { background-color: #faf5ff; }
+    th.bg-inc { background-color: #f8fafc; }
+    th.bg-exp { background-color: #fff5f5; }
+    th.bg-white { background-color: #ffffff; }
+
+    .sim-list { max-height: 380px; overflow-y: auto; padding-right: 4px; }
+    .sim-card { 
+      background: #f8faff; 
+      border: 1px solid var(--line); 
+      border-radius: 11px; 
+      padding: 12px; 
+      margin-bottom: 8px; 
+      font-size: 13.5px;
+    }
+    .sim-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+
+    .modal-overlay { display: none; position: fixed; inset: 0; z-index: 99; background: rgba(8, 16, 34, 0.66); padding: 16px; justify-content: center; align-items: center; }
+    
+    .modal { 
+      width: min(1400px, 98%); 
+      max-height: 95vh; 
+      height: auto;
+      overflow: hidden; 
+      display: flex;
+      flex-direction: column;
+      padding: 24px; 
+      border-radius: 20px; 
+      background: #fff; 
+    }
+    .modal-content-area {
+      overflow-y: auto;
+      flex: 1;
+      padding-right: 4px;
+    }
+    
+    .table-scroll { 
+      max-height: 50vh; 
+      overflow-y: auto; 
+      position: relative; 
+      border: 1px solid var(--line);
+      border-radius: 10px;
+    }
+
+    .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .modal-head h3 { margin: 0; font-size: 24px; }
+    .btn-close { border: none; background: transparent; font-size: 32px; cursor: pointer; line-height: 1; }
+    .btn-mini { border: none; border-radius: 8px; font-size: 11px; color: #fff; padding: 4px 8px; cursor: pointer; }
+    .btn-edit { background: #3b82f6; }
+    .btn-del { background: #ef4f5f; }
+
+    @media (max-width: 980px) {
+      .actions, .layout { grid-template-columns: 1fr; }
+      .top { align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <section id="login-screen">
+    <div class="login-box card">
+      <h1>📈 미래지출 대비 재무 시뮬레이터</h1>
+      <p class="muted" style="font-size:15px; margin-bottom:22px;">현재 자산과 미래 예상 수입/지출을 합쳐, 특정 시점 목돈 지출을 감당할 수 있는지 확인하세요.</p>
+      <button class="btn-primary" id="btn-login">Google 로그인으로 시작하기</button>
+    </div>
+  </section>
+
+  <main id="main-app" class="wrap hidden">
+    <div class="top">
+      <div>
+        <div class="title-row">
+          <h1 id="title-text">재무 시뮬레이터</h1>
+        </div>
+        <p class="muted" style="margin: 4px 0 0;">핵심 기능: 미래 큰 지출 시점의 자금 부족 여부를 월별 현금흐름 기반으로 진단</p>
+      </div>
+      <button class="btn-ghost" id="btn-logout">로그아웃</button>
+    </div>
+
+    <section class="kpis">
+      <div class="card kpi"><p>총 순자산</p><h3 id="board-networth">0원</h3></div>
+      <div class="card kpi"><p>현재 가용자산</p><h3 id="board-available">0원</h3></div>
+    </section>
+
+    <section class="actions">
+      <button style="background: var(--primary); color: #fff; border: none; font-size: 15px;" onclick="openModal('modal-asset')">💰 현재 자산/부채 관리</button>
+      <button style="background: var(--primary); color: #fff; border: none; font-size: 15px;" onclick="openModal('modal-monthly')">📅 미래 월 수입/지출 관리</button>
+      <button style="background: #0f766e; color: #fff; border: none; font-size: 15px;" onclick="openModal('modal-history')">📸 실제 자산 기록 관리</button>
+    </section>
+
+    <section class="layout">
+      <div class="section card">
+        <div class="sub-head">
+          <h2>미래 시점 자산 예측</h2>
+        </div>
+
+        <div class="input-row">
+          <input type="date" id="pred-date" style="max-width:210px;" />
+          <button class="btn-primary" onclick="window.calculatePrediction()">해당일 예측</button>
+        </div>
+        <div class="input-row">
+          <input disabled value="예측 가용자산" style="max-width:130px; color:var(--sub);" />
+          <input id="pred-avail" disabled />
+          <input disabled value="예측 순자산" style="max-width:110px; color:var(--sub);" />
+          <input id="pred-net" disabled />
+        </div>
+
+        <div class="sub-head" style="margin-top:12px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <h2 style="margin:0; font-size:16px;">자산 변화 그래프</h2>
+            <button class="btn-ghost" style="padding:4px 8px; font-size:12px;" onclick="openModal('modal-forecast')">월별 상세 보기 📊</button>
+          </div>
+          <label class="muted">표시 연도
+            <input type="number" id="chart-year" min="2025" value="2035" onchange="window.drawChart()" style="width:90px; margin-left:6px;" />
+          </label>
+        </div>
+        <div style="position:relative;height:230px;"><canvas id="predictChart"></canvas></div>
+        <p class="muted" style="text-align:center; margin-top:8px; font-size:12px;">💡 그래프의 동그라미 표시에 마우스를 올리면 해당 월의 주요 일정을 확인할 수 있습니다.</p>
+      </div>
+
+      <div class="section card" style="border-color:#cad8ff;">
+        <h2>미래 목돈 일정 & 진단 (수입/지출/회수/상환)</h2>
+        <div class="input-row">
+          <select id="sch-type" style="max-width:165px; font-weight:bold;" onchange="window.toggleLinkedAsset()">
+            <option value="expense">🔴 지출 (예: 차량 잔금)</option>
+            <option value="income">🟢 수입 (예: 적금 만기)</option>
+            <option value="transfer">🔄 묶인 자산 회수 (예: 퇴직금)</option>
+            <option value="conversion">🏠 자산 전환 (예: 중도금 납부)</option>
+            <option value="loan_in">💰 대출 실행 (순자산 유지)</option>
+            <option value="repayment">🏦 대출 상환 (순자산 유지)</option>
+          </select>
+          <input type="date" id="sch-date" />
+          
+          <select id="sch-linked-asset" class="hidden" style="max-width:200px; background:#e0f2fe; color:#0369a1; border-color:#bae6fd; font-weight:bold;" onchange="window.autoFillAssetAmount()">
+            <option value="">-- 회수할 자산 선택 --</option>
+          </select>
+        </div>
+        <div class="input-row">
+          <input type="text" id="sch-memo" placeholder="일정명 (예: 전세 갱신, 퇴직금 수령)" style="flex:1;" />
+          <input type="text" inputmode="numeric" id="sch-amount" placeholder="최종 예상 금액(원)" style="max-width:160px;" class="comma-input" />
+          <button class="btn-primary" onclick="saveData('schedule')">일정 등록</button>
+        </div>
+
+        <h3 style="font-size:15px; margin:14px 0 6px;">즉시 시나리오 점검 (지출 테스트용)</h3>
+        <div class="input-row" style="margin-bottom:3px;">
+          <input type="date" id="quick-date" />
+          <input type="text" inputmode="numeric" id="quick-amount" placeholder="테스트 금액(원)" class="comma-input" />
+          <button class="btn-primary" onclick="window.runQuickCheck()">시뮬레이션</button>
+        </div>
+        <p id="quick-result" class="muted" style="margin-top:0;">날짜와 금액을 입력하면 해당 지출이 가능한지 보여줍니다.</p>
+
+        <p class="muted" style="margin-top:8px;">등록된 일정은 해당 날짜 "직전" 잔액을 기준으로 반영됩니다.</p>
+        <div id="simulator-list" class="sim-list"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="modal-asset" class="modal-overlay">
+    <section class="modal">
+      <div class="modal-head">
+        <h3>💰 현재 자산 / 부채 관리</h3>
+        <button class="btn-close" onclick="closeModal('modal-asset')">×</button>
+      </div>
+      <div class="modal-content-area">
+        <div style="background: var(--bg); padding: 16px; border-radius: 12px; margin-bottom: 24px;">
+          <div class="input-row">
+            <input type="text" id="ast-cat" placeholder="분류 (예: 비상금, 예금, 대출)" list="cat-hints" />
+            <datalist id="cat-hints"><option value="현금성 자산" /><option value="투자 자산" /><option value="부동산" /><option value="대출" /></datalist>
+            <select id="ast-behavior">
+              <option value="avail">🟢 가용 자산 (예금/현금 등)</option>
+              <option value="tied">🏠 묶인 자산 (부동산/퇴직금/보증금)</option>
+              <option value="short_loan">💳 단기 부채 (신용카드 등)</option>
+              <option value="loan">🔻 장기 부채 (대출금 등)</option>
+              <option value="mental_loan">☁️ 심적 부채</option>
+            </select>
+            <input type="text" id="ast-memo" placeholder="상세 메모" />
+          </div>
+          <div class="input-row" style="margin-bottom:0;">
+            <input type="text" inputmode="numeric" id="ast-amount" placeholder="현재 금액(원)" class="comma-input" />
+            <button class="btn-primary" id="btn-ast-save" onclick="saveData('asset')">등록</button>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 10px;">
+          <div style="background: #f0fdf4; padding: 14px; border-radius: 12px; border: 1px solid #bbf7d0;">
+            <h4 style="margin: 0 0 10px; color: #166534;">🟢 가용 자산</h4>
+            <div class="table-scroll">
+              <table>
+                <colgroup><col style="width:auto;"><col style="width:130px;"><col style="width:115px;"></colgroup>
+                <thead><tr>
+                  <th class="sortable bg-avail" data-list="avail" data-col="cat" onclick="handleSort('avail', 'cat')">분류/메모 <span class="sort-icon">↕</span></th>
+                  <th class="td-right sortable bg-avail" data-list="avail" data-col="amount" onclick="handleSort('avail', 'amount')">금액 <span class="sort-icon">↕</span></th>
+                  <th class="bg-avail" style="text-align:center;">관리</th>
+                </tr></thead>
+                <tbody id="avail-list"></tbody>
+              </table>
+            </div>
+          </div>
+          <div style="background: #f8fafc; padding: 14px; border-radius: 12px; border: 1px solid #e2e8f0;">
+            <h4 style="margin: 0 0 10px; color: #334155;">🏠 묶인 자산</h4>
+            <div class="table-scroll">
+              <table>
+                <colgroup><col style="width:auto;"><col style="width:130px;"><col style="width:115px;"></colgroup>
+                <thead><tr>
+                  <th class="sortable bg-tied" data-list="tied" data-col="cat" onclick="handleSort('tied', 'cat')">분류/메모 <span class="sort-icon">↕</span></th>
+                  <th class="td-right sortable bg-tied" data-list="tied" data-col="amount" onclick="handleSort('tied', 'amount')">금액 <span class="sort-icon">↕</span></th>
+                  <th class="bg-tied" style="text-align:center;">관리</th>
+                </tr></thead>
+                <tbody id="tied-list"></tbody>
+              </table>
+            </div>
+          </div>
+          <div style="background: #fef2f2; padding: 14px; border-radius: 12px; border: 1px solid #fecaca;">
+            <h4 style="margin: 0 0 10px; color: #991b1b;">🔻 부채 (단기/장기)</h4>
+            <div class="table-scroll">
+              <table>
+                <colgroup><col style="width:auto;"><col style="width:130px;"><col style="width:115px;"></colgroup>
+                <thead><tr>
+                  <th class="sortable bg-loan" data-list="loan" data-col="cat" onclick="handleSort('loan', 'cat')">분류/메모 <span class="sort-icon">↕</span></th>
+                  <th class="td-right sortable bg-loan" data-list="loan" data-col="amount" onclick="handleSort('loan', 'amount')">금액 <span class="sort-icon">↕</span></th>
+                  <th class="bg-loan" style="text-align:center;">관리</th>
+                </tr></thead>
+                <tbody id="loan-list"></tbody>
+              </table>
+            </div>
+          </div>
+          <div style="background: #faf5ff; padding: 14px; border-radius: 12px; border: 1px solid #e9d5ff;">
+            <h4 style="margin: 0 0 10px; color: #6b21a8;">☁️ 심적 부채</h4>
+            <div class="table-scroll">
+              <table>
+                <colgroup><col style="width:auto;"><col style="width:130px;"><col style="width:115px;"></colgroup>
+                <thead><tr>
+                  <th class="sortable bg-mental" data-list="mental_loan" data-col="cat" onclick="handleSort('mental_loan', 'cat')">분류/메모 <span class="sort-icon">↕</span></th>
+                  <th class="td-right sortable bg-mental" data-list="mental_loan" data-col="amount" onclick="handleSort('mental_loan', 'amount')">금액 <span class="sort-icon">↕</span></th>
+                  <th class="bg-mental" style="text-align:center;">관리</th>
+                </tr></thead>
+                <tbody id="mental-loan-list"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="modal-monthly" class="modal-overlay">
+    <section class="modal">
+      <div class="modal-head">
+        <h3>📅 미래 월 수입 / 지출 관리</h3>
+        <button class="btn-close" onclick="closeModal('modal-monthly')">×</button>
+      </div>
+      <div class="modal-content-area">
+        <p class="muted" style="margin-bottom: 12px;">예: 급여, 임대수익, 보험료, 할부, 교육비. 시작월~종료월 범위 내에서 매월 자동 반영됩니다.</p>
+        
+        <div style="background: var(--bg); padding: 16px; border-radius: 12px; margin-bottom: 24px;">
+          <div class="input-row">
+            <select id="mo-type" style="max-width:120px;"><option value="income">수입</option><option value="expense">지출</option></select>
+            <input type="text" id="mo-memo" placeholder="항목명" />
+            <input type="text" inputmode="numeric" id="mo-amount" placeholder="월 금액(원)" class="comma-input" />
+          </div>
+          <div class="input-row">
+            <input type="text" id="mo-desc" placeholder="상세 메모 작성 (선택)" style="flex:1;" />
+          </div>
+          <div class="input-row" style="margin-bottom:0;">
+            <input type="month" id="mo-start" />
+            <input type="month" id="mo-end" placeholder="종료월(선택)" />
+            <button class="btn-primary" id="btn-mo-save" onclick="saveData('monthly')">항목 추가</button>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+          <div style="background: #f8fafc; padding: 14px; border-radius: 12px; border: 1px solid #e2e8f0;">
+            <h4 style="margin: 0 0 10px; color: #09a66d;">🟢 수입 목록</h4>
+            <div class="table-scroll">
+              <table>
+                <colgroup><col style="width:auto;"><col style="width:130px;"><col style="width:115px;"></colgroup>
+                <thead><tr>
+                  <th class="sortable bg-inc" data-list="income" data-col="memo" onclick="handleSort('income', 'memo')">항목(기간) <span class="sort-icon">↕</span></th>
+                  <th class="td-right sortable bg-inc" data-list="income" data-col="amount" onclick="handleSort('income', 'amount')">금액 <span class="sort-icon">↕</span></th>
+                  <th class="bg-inc" style="text-align:center;">관리</th>
+                </tr></thead>
+                <tbody id="income-list"></tbody>
+              </table>
+            </div>
+          </div>
+          <div style="background: #fff5f5; padding: 14px; border-radius: 12px; border: 1px solid #fed7d7;">
+            <h4 style="margin: 0 0 10px; color: #e53e3e;">🔴 지출 목록</h4>
+            <div class="table-scroll">
+              <table>
+                <colgroup><col style="width:auto;"><col style="width:130px;"><col style="width:115px;"></colgroup>
+                <thead><tr>
+                  <th class="sortable bg-exp" data-list="expense" data-col="memo" onclick="handleSort('expense', 'memo')">항목(기간) <span class="sort-icon">↕</span></th>
+                  <th class="td-right sortable bg-exp" data-list="expense" data-col="amount" onclick="handleSort('expense', 'amount')">금액 <span class="sort-icon">↕</span></th>
+                  <th class="bg-exp" style="text-align:center;">관리</th>
+                </tr></thead>
+                <tbody id="expense-list"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="padding: 20px; border-color: var(--primary); background: #f0f7ff;">
+          <h4 style="margin: 0 0 12px; color: var(--primary); font-size: 18px;">📊 향후 5개년 연도별 월평균 흐름 요약</h4>
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align:center; background:#e0ecff;">연도</th>
+                <th class="td-right" style="background:#e0ecff; color:#09a66d;">평균 수입</th>
+                <th class="td-right" style="background:#e0ecff; color:#ef4f4f;">평균 지출</th>
+                <th class="td-right" style="background:#e0ecff; font-weight:bold;">월평균 잉여/부족</th>
+              </tr>
+            </thead>
+            <tbody id="monthly-yearly-summary-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="modal-history" class="modal-overlay">
+    <section class="modal" style="width: min(1000px, 100%);">
+      <div class="modal-head">
+        <h3>📸 실제 자산 기록 (스냅샷)</h3>
+        <button class="btn-close" onclick="closeModal('modal-history')">×</button>
+      </div>
+      <div class="modal-content-area">
+        <div style="background: #f0fdfa; padding: 16px; border-radius: 12px; border: 1px solid #ccfbf1; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h4 style="margin: 0 0 4px; color: #0f766e;">내 자산의 흐름을 기록하세요</h4>
+            <p class="muted" style="margin: 0;">현재 등록된 자산/부채 데이터를 기반으로 오늘의 '총 순자산'을 영구 기록합니다.</p>
+          </div>
+          <button class="btn-primary" style="background: #0d9488;" onclick="window.saveHistory()">+ 현재 상태 스냅샷 저장하기</button>
+        </div>
+        <div class="table-scroll" style="max-height: 60vh;">
+          <table>
+            <colgroup><col style="width:auto;"><col style="width:180px;"><col style="width:180px;"><col style="width:95px;"></colgroup>
+            <thead>
+              <tr>
+                <th class="sortable bg-white" data-list="history" data-col="createdAt" onclick="handleSort('history', 'createdAt')">기록일자 <span class="sort-icon">↕</span></th>
+                <th class="td-right sortable bg-white" data-list="history" data-col="netWorth" onclick="handleSort('history', 'netWorth')">총 순자산 <span class="sort-icon">↕</span></th>
+                <th class="td-right sortable bg-white" data-list="history" data-col="available" onclick="handleSort('history', 'available')">가용 자산 <span class="sort-icon">↕</span></th>
+                <th class="bg-white" style="text-align:center;">관리</th>
+              </tr>
+            </thead>
+            <tbody id="history-list"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="modal-forecast" class="modal-overlay">
+    <section class="modal">
+      <div class="modal-head">
+        <h3>📊 월별 시뮬레이션 상세</h3>
+        <button class="btn-close" onclick="closeModal('modal-forecast')">×</button>
+      </div>
+      <div class="modal-content-area">
+        <div class="table-scroll" style="max-height: 75vh;">
+          <table>
+            <thead><tr>
+              <th class="sortable bg-white" data-list="forecast" data-col="month" onclick="handleSort('forecast', 'month')">월 <span class="sort-icon">↕</span></th>
+              <th class="td-right sortable bg-white" data-list="forecast" data-col="flow" onclick="handleSort('forecast', 'flow')">월 순현금흐름 <span class="sort-icon">↕</span></th>
+              <th class="td-right sortable bg-white" data-list="forecast" data-col="cash" onclick="handleSort('forecast', 'cash')">누적 가용자산 <span class="sort-icon">↕</span></th>
+              <th class="td-right sortable bg-white" data-list="forecast" data-col="net" onclick="handleSort('forecast', 'net')">누적 순자산 <span class="sort-icon">↕</span></th>
+            </tr></thead>
+            <tbody id="forecast-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="modal-memo" class="modal-overlay" style="z-index: 100;">
+    <section class="modal" style="width: min(500px, 100%); max-height: 60vh;">
+      <div class="modal-head">
+        <h3>📝 상세 메모</h3>
+        <button class="btn-close" onclick="closeModal('modal-memo')">×</button>
+      </div>
+      <p id="memo-content" style="white-space: pre-wrap; color: var(--text); font-size: 15px; margin-top: 10px; line-height: 1.5;"></p>
+    </section>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+    import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, deleteDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDS4Xqe9Yl5q_wOA6JBTJNJsBHI21GZiMk",
+      authDomain: "mjjj-future-assets.firebaseapp.com",
+      projectId: "mjjj-future-assets",
+      storageBucket: "mjjj-future-assets.firebasestorage.app",
+      messagingSenderId: "444555635196",
+      appId: "1:444555635196:web:5f18f3c855e9499c44aa79"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const KRW = new Intl.NumberFormat('ko-KR');
+    const won = (num) => `${KRW.format(Math.round(num || 0))}원`;
+    
+    // ✅ 날짜 파싱 안전장치 추가 (비어있으면 오늘 날짜 처리)
+    const parseDate = (str) => {
+      if (!str) return new Date();
+      const d = new Date(`${str}T00:00:00`);
+      return isNaN(d.getTime()) ? new Date() : d;
+    };
+    
+    const monthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const monthStart = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
+    const monthEnd = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    const getNum = (str) => Number(String(str).replace(/,/g, '')) || 0;
+
+    let gAvailable = 0, gNetWorth = 0, gMonthlyItems = [], gSchedules = [], gAssets = [], gHistory = []; 
+    let sortState = { 
+      avail: { col: 'cat', asc: true }, 
+      tied: { col: 'cat', asc: true }, 
+      loan: { col: 'cat', asc: true }, 
+      mental_loan: { col: 'cat', asc: true }, 
+      income: { col: 'memo', asc: true }, 
+      expense: { col: 'memo', asc: true },
+      history: { col: 'createdAt', asc: false },
+      forecast: { col: 'month', asc: true }
+    };
+    window.gForecastRows = [];
+
+    window.openModal = (id) => document.getElementById(id).style.display = 'flex';
+    window.closeModal = (id) => document.getElementById(id).style.display = 'none';
+    window.showMemo = (desc) => { document.getElementById('memo-content').innerText = desc || '작성된 상세 메모가 없습니다.'; openModal('modal-memo'); };
+    window.toggleLinkedAsset = () => { const t = document.getElementById('sch-type').value; document.getElementById('sch-linked-asset').classList.toggle('hidden', t !== 'transfer'); };
+    window.autoFillAssetAmount = () => { 
+      const s = document.getElementById('sch-linked-asset'); 
+      if (s && s.value) document.getElementById('sch-amount').value = KRW.format(s.options[s.selectedIndex].dataset.amount); 
+    };
+
+    function updateLinkedAssetDropdown() {
+      const selectEl = document.getElementById('sch-linked-asset');
+      if(!selectEl) return;
+      const tiedAssets = gAssets.filter(a => a.behavior === 'tied');
+      let html = '<option value="">-- 회수할 자산 선택 --</option>';
+      tiedAssets.forEach(a => html += `<option value="${a.id}" data-amount="${a.amount || 0}">[원금 ${won(a.amount)}] ${a.cat}</option>`);
+      selectEl.innerHTML = html;
+    }
+
+    function getActiveMonthsInYear(item, year) {
+      if(!item.start) return 0;
+      const start = new Date(item.start + "-01");
+      const end = (item.end === '9999-12' || !item.end) ? new Date(year, 11, 31) : new Date(item.end + "-01");
+      const yearStart = new Date(year, 0, 1), yearEnd = new Date(year, 11, 31);
+      const overlapStart = start > yearStart ? start : yearStart;
+      const overlapEnd = end < yearEnd ? end : yearEnd;
+      if (overlapStart > overlapEnd) return 0;
+      return (overlapEnd.getFullYear() - overlapStart.getFullYear()) * 12 + (overlapEnd.getMonth() - overlapStart.getMonth()) + 1;
+    }
+
+    window.renderMonthlyYearlySummary = () => {
+      const currentYear = new Date().getFullYear();
+      let html = '';
+      for (let i = 0; i < 6; i++) {
+        const year = currentYear + i; let incSum = 0, expSum = 0;
+        gMonthlyItems.forEach(item => {
+          const activeMonths = getActiveMonthsInYear(item, year);
+          const val = ((item.amount || 0) * activeMonths) / 12;
+          if (item.type === 'income') incSum += val; else expSum += val;
+        });
+        const net = incSum - expSum;
+        html += `<tr><td style="text-align:center; font-weight:bold;">${year}년</td><td class="td-right" style="color:#09a66d">+${won(incSum)}</td><td class="td-right" style="color:#ef4f4f">-${won(expSum)}</td><td class="td-right" style="font-weight:bold; color:${net >= 0 ? '#09a66d' : '#ef4f4f'}">${won(net)}</td></tr>`;
+      }
+      const el = document.getElementById('monthly-yearly-summary-body');
+      if(el) el.innerHTML = html;
+    };
+
+    function sumSchedulesInRange(startDate, endDate, excludeId = null) {
+      return gSchedules.reduce((acc, s) => {
+        if (excludeId && s.id === excludeId) return acc;
+        if (!s.date) return acc;
+        const d = parseDate(s.date);
+        const amount = s.amount || 0;
+        if (d >= startDate && d <= endDate) {
+          const type = s.schType || 'expense';
+          if (type === 'income' || type === 'loan_in') { acc.cash += amount; if(type === 'income') acc.net += amount; }
+          else if (type === 'transfer') { acc.cash += amount; acc.net += (amount - (s.baseAmount || 0)); }
+          else if (type === 'repayment' || type === 'conversion') { acc.cash -= amount; }
+          else { acc.cash -= amount; acc.net -= amount; }
+        }
+        return acc;
+      }, { cash: 0, net: 0 });
+    }
+
+    function simulateTo(targetDateStr, options = {}) {
+      if (!targetDateStr) return { avail: gAvailable, net: gNetWorth };
+      const targetDate = parseDate(targetDateStr);
+      let cash = gAvailable, net = gNetWorth; const today = new Date(); let cursor = monthStart(today);
+      while (cursor <= targetDate) {
+        const mk = monthKey(cursor);
+        const flow = gMonthlyItems.reduce((s, i) => {
+          if (!i.start) return s;
+          const endStr = i.end === '9999-12' || !i.end ? '9999-12' : i.end;
+          return (mk >= i.start && mk <= endStr) ? s + (i.type === 'income' ? (i.amount||0) : -(i.amount||0)) : s;
+        }, 0);
+        cash += flow; net += flow;
+        const delta = sumSchedulesInRange(cursor, monthEnd(cursor), options.excludeScheduleId);
+        cash += delta.cash; net += delta.net; cursor.setMonth(cursor.getMonth() + 1);
+      }
+      return { avail: cash, net };
+    }
+
+    function buildRows() {
+      const rows = []; const now = new Date(); let cursor = monthStart(now); 
+      const yearEl = document.getElementById('chart-year');
+      const endYear = yearEl ? Number(yearEl.value) : now.getFullYear() + 8;
+      const end = monthEnd(new Date(endYear, 11, 31)); 
+      let cash = gAvailable, net = gNetWorth;
+      while (cursor <= end) {
+        const mk = monthKey(cursor);
+        const flow = gMonthlyItems.reduce((s, i) => {
+          if (!i.start) return s;
+          const endStr = i.end === '9999-12' || !i.end ? '9999-12' : i.end;
+          return (mk >= i.start && mk <= endStr) ? s + (i.type === 'income' ? (i.amount||0) : -(i.amount||0)) : s;
+        }, 0);
+        const delta = sumSchedulesInRange(cursor, monthEnd(cursor));
+        cash += (flow + delta.cash); net += (flow + delta.net);
+        rows.push({ month: mk, flow: flow + delta.cash, cash, net }); cursor.setMonth(cursor.getMonth() + 1);
+      }
+      return rows;
+    }
+
+    // ✅ 일정 목록 렌더링 (진단 기능 & 글씨 크기 조정 포함)
+    function renderSchedules() {
+      gSchedules.sort((a, b) => parseDate(a.date).getTime() - parseDate(b.date).getTime());
+      const html = gSchedules.map(s => {
+        const before = simulateTo(s.date || '2000-01-01', { includeTargetEvents: false, excludeScheduleId: s.id }).avail;
+        const type = s.schType || 'expense';
+        const isOutflow = ['expense', 'repayment', 'conversion'].includes(type);
+        const amount = s.amount || 0;
+        
+        let typeBadge = '';
+        if(type === 'loan_in') typeBadge = '<span class="pill" style="background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; margin-right:5px;">💰 대출</span>';
+        else if(type === 'conversion') typeBadge = '<span class="pill" style="background:#fff7ed; color:#c2410c; margin-right:5px;">🏠 전환</span>';
+        else if(type === 'repayment') typeBadge = '<span class="pill" style="background:#e0e7ff; color:#3730a3; margin-right:5px;">🏦 상환</span>';
+        else if(type === 'transfer') typeBadge = '<span class="pill" style="background:#e0f2fe; color:#0369a1; margin-right:5px;">🔄 회수</span>';
+        else if(type === 'income') typeBadge = '<span class="pill" style="background:#dcfce7; color:#166534; margin-right:5px;">🟢 수입</span>';
+        else typeBadge = '<span class="pill" style="background:#fee2e2; color:#991b1b; margin-right:5px;">🔴 지출</span>';
+
+        let diagnosisBadge = '';
+        if (isOutflow) {
+          const remain = before - amount;
+          diagnosisBadge = remain >= 0 
+            ? `<span class="pill ok">충당 가능 (후 잔액: ${won(remain)})</span>`
+            : `<span class="pill bad">자금 부족 (${won(-remain)} 부족)</span>`;
+        } else {
+          diagnosisBadge = `<span class="pill ok">반영 예정 (해당월 자산 증가)</span>`;
+        }
+        
+        return `
+          <div class="sim-card">
+            <div class="sim-top">
+              <div>
+                ${typeBadge}<strong>${s.date || '-'}</strong><br>
+                <span class="muted" style="display:inline-block; margin-top:4px;">${s.memo || ''}</span>
+              </div>
+              <div style="text-align:right;">
+                <strong>${won(amount)}</strong><br>
+                <button class="btn-mini btn-del" onclick="deleteItem('${s.id}')" style="margin-top:6px;">삭제</button>
+              </div>
+            </div>
+            <div style="margin-top:8px;">${diagnosisBadge}</div>
+          </div>`;
+      }).join('');
+      document.getElementById('simulator-list').innerHTML = html || '<p class="muted" style="text-align:center; padding:20px 0;">등록된 일정이 없습니다.</p>';
+    }
+
+    window.updateSortIcons = () => {
+      document.querySelectorAll('th.sortable').forEach(th => {
+        const list = th.dataset.list; const col = th.dataset.col; const icon = th.querySelector('.sort-icon');
+        if (!icon || !sortState[list]) return;
+        if (sortState[list].col === col) { icon.innerText = sortState[list].asc ? '▲' : '▼'; icon.classList.add('active'); }
+        else { icon.innerText = '↕'; icon.classList.remove('active'); }
+      });
+    };
+
+    window.handleSort = (list, col) => {
+      if (!sortState[list]) return;
+      if (sortState[list].col === col) sortState[list].asc = !sortState[list].asc;
+      else { sortState[list].col = col; sortState[list].asc = true; }
+      window.updateSortIcons();
+      if (['avail', 'tied', 'loan', 'mental_loan'].includes(list)) window.renderAssetTables();
+      else if (['income', 'expense'].includes(list)) window.renderMonthlyTables();
+      else if (list === 'history') window.renderHistoryTable();
+      else if (list === 'forecast') window.renderForecastTable();
+    };
+
+    window.drawChart = () => {
+      const rows = buildRows();
+      window.gForecastRows = rows.slice(0, 120);
+      window.renderForecastTable();
+      if (window.myChart) window.myChart.destroy();
+      const ctx = document.getElementById('predictChart');
+      if(!ctx) return;
+      window.myChart = new Chart(ctx.getContext('2d'), {
+        type: 'line', data: { labels: rows.map(r => r.month.slice(2)), datasets: [
+          { label: '가용 자산', data: rows.map(r => r.cash), borderColor: '#09a66d', borderWidth: 3, fill: true, tension: 0.4, pointRadius: 0, backgroundColor: 'rgba(9, 166, 109, 0.1)' },
+          { label: '순자산', data: rows.map(r => r.net), borderColor: '#2f6bff', borderWidth: 3, fill: true, tension: 0.4, pointRadius: 0, backgroundColor: 'rgba(47, 107, 255, 0.1)' }
+        ]},
+        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { y: { ticks: { callback: (v) => `${Number((v / 100000000).toFixed(1))}억` } } } }
+      });
+    };
+
+    window.renderAssetTables = () => {
+      const groups = { avail: [], tied: [], loan: [], mental_loan: [] };
+      gAssets.forEach(d => {
+        const b = d.behavior || 'avail';
+        const key = (b === 'short_loan' || b === 'loan') ? 'loan' : b;
+        if(groups[key]) groups[key].push(d);
+        else groups.avail.push(d); // 안전망
+      });
+      ['avail', 'tied', 'loan', 'mental_loan'].forEach(type => {
+        const arr = groups[type]; const state = sortState[type];
+        if(state) {
+          arr.sort((a,b) => {
+            let valA = a[state.col] || ''; let valB = b[state.col] || '';
+            if(typeof valA==='string') valA = valA.toLowerCase(); if(typeof valB==='string') valB = valB.toLowerCase();
+            return (valA < valB ? -1 : (valA > valB ? 1 : 0)) * (state.asc ? 1 : -1);
+          });
+        }
+        let sum = 0; 
+        let html = arr.map(d => { sum += (d.amount||0); return `<tr><td><strong>${d.cat||'미분류'}</strong><br><span class="muted">${d.memo || '-'}</span></td><td class="td-right">${won(d.amount)}</td><td style="text-align:center;"><button class="btn-mini btn-del" onclick="window.deleteItem('${d.id}')">삭제</button></td></tr>`; }).join('');
+        const el = document.getElementById(type + '-list');
+        if(el) el.innerHTML = arr.length > 0 ? html + `<tr class="tr-total"><td>합계</td><td class="td-right">${won(sum)}</td><td></td></tr>` : '<tr><td colspan="3" class="muted" style="text-align:center;">항목 없음</td></tr>';
+      });
+    };
+
+    window.renderMonthlyTables = () => {
+      const inc = gMonthlyItems.filter(d => d.type === 'income'), exp = gMonthlyItems.filter(d => d.type === 'expense');
+      const buildHtml = (arr, isInc) => {
+        const state = sortState[isInc ? 'income' : 'expense'];
+        if(state) {
+          arr.sort((a,b) => {
+            let valA = a[state.col] || ''; let valB = b[state.col] || '';
+            if(typeof valA==='string') valA = valA.toLowerCase(); if(typeof valB==='string') valB = valB.toLowerCase();
+            return (valA < valB ? -1 : (valA > valB ? 1 : 0)) * (state.asc ? 1 : -1);
+          });
+        }
+        let sum = 0; 
+        let html = arr.map(d => { sum += (d.amount||0); return `<tr><td><strong>${d.memo||''}</strong><br><span class="muted">${d.start||''} ~ ${d.end === '9999-12' || !d.end ? '계속' : d.end}</span></td><td class="td-right">${won(d.amount)}</td><td style="text-align:center;"><button class="btn-mini btn-del" onclick="window.deleteItem('${d.id}')">삭제</button></td></tr>`; }).join('');
+        return arr.length > 0 ? html + `<tr class="tr-total"><td>합계</td><td class="td-right">${won(sum)}</td><td></td></tr>` : '<tr><td colspan="3" class="muted" style="text-align:center;">항목 없음</td></tr>';
+      };
+      const incEl = document.getElementById('income-list'); if(incEl) incEl.innerHTML = buildHtml(inc, true);
+      const expEl = document.getElementById('expense-list'); if(expEl) expEl.innerHTML = buildHtml(exp, false);
+      window.renderMonthlyYearlySummary();
+    };
+
+    window.renderHistoryTable = () => {
+      const state = sortState.history;
+      const sorted = [...gHistory];
+      if(state) {
+        sorted.sort((a,b) => {
+          let valA = a[state.col] || ''; let valB = b[state.col] || '';
+          return (valA < valB ? -1 : (valA > valB ? 1 : 0)) * (state.asc ? 1 : -1);
+        });
+      }
+      const el = document.getElementById('history-list');
+      if(el) el.innerHTML = sorted.map(h => `<tr><td>${h.date||''}</td><td class="td-right">${won(h.netWorth)}</td><td class="td-right">${won(h.available)}</td><td style="text-align:center;"><button class="btn-mini btn-del" onclick="window.deleteItem('${h.id}')">삭제</button></td></tr>`).join('') || '<tr><td colspan="4" class="muted" style="text-align:center;">기록 없음</td></tr>';
+    };
+
+    window.renderForecastTable = () => {
+      const state = sortState.forecast;
+      const sorted = [...window.gForecastRows];
+      if(state) {
+        sorted.sort((a,b) => {
+          let valA = a[state.col] || ''; let valB = b[state.col] || '';
+          return (valA < valB ? -1 : (valA > valB ? 1 : 0)) * (state.asc ? 1 : -1);
+        });
+      }
+      const el = document.getElementById('forecast-table-body');
+      if(el) el.innerHTML = sorted.map(r => `<tr><td style="width:25%">${r.month}</td><td class="td-right" style="color:${(r.flow||0)>=0?'#09a66d':'#ef4f4f'}; width:25%">${won(r.flow)}</td><td class="td-right" style="width:25%">${won(r.cash)}</td><td class="td-right" style="width:25%">${won(r.net)}</td></tr>`).join('');
+    };
+
+    window.saveData = async (docType) => {
+      const data = { docType, createdAt: Date.now() };
+      if (docType === 'monthly') {
+        data.type = document.getElementById('mo-type').value; data.memo = document.getElementById('mo-memo').value.trim(); data.amount = Math.abs(getNum(document.getElementById('mo-amount').value)); data.start = document.getElementById('mo-start').value; data.end = document.getElementById('mo-end').value || '9999-12';
+        if (!data.memo || !data.amount || !data.start) return alert('필수 항목을 모두 입력하세요.');
+      } else if (docType === 'asset') {
+        data.behavior = document.getElementById('ast-behavior').value; data.cat = document.getElementById('ast-cat').value.trim(); data.amount = Math.abs(getNum(document.getElementById('ast-amount').value)); data.memo = document.getElementById('ast-memo').value.trim();
+        if (!data.cat || !data.amount) return alert('필수 항목을 모두 입력하세요.');
+      } else if (docType === 'schedule') {
+        data.schType = document.getElementById('sch-type').value; data.date = document.getElementById('sch-date').value; data.memo = document.getElementById('sch-memo').value.trim(); data.amount = Math.abs(getNum(document.getElementById('sch-amount').value));
+        if (data.schType === 'transfer') { const l = document.getElementById('sch-linked-asset'); if(!l.value) return alert('회수할 묶인 자산을 선택해주세요.'); data.linkedAssetId = l.value; data.baseAmount = Number(l.options[l.selectedIndex].dataset.amount || 0); }
+        if (!data.date || !data.memo || !data.amount) return alert('필수 항목을 모두 입력하세요.');
+      }
+      await addDoc(collection(db, 'uiwang_v10'), data);
+      alert('등록이 완료되었습니다.');
+    };
+
+    window.calculatePrediction = () => {
+      const target = document.getElementById('pred-date').value;
+      if (!target) return;
+      const res = simulateTo(target);
+      document.getElementById('pred-avail').value = won(res.avail);
+      document.getElementById('pred-net').value = won(res.net);
+    };
+
+    window.runQuickCheck = () => {
+      const d = document.getElementById('quick-date').value;
+      const amount = getNum(document.getElementById('quick-amount').value);
+      if (!d || !amount) return;
+      const before = simulateTo(d, { includeTargetEvents: false }).avail;
+      const el = document.getElementById('quick-result');
+      if (before >= amount) el.innerHTML = `<span class="pill ok">가능</span> 잔액 ${won(before)} -> 지출 후 ${won(before-amount)}`;
+      else el.innerHTML = `<span class="pill bad">부족</span> 잔액 ${won(before)} -> ${won(amount-before)} 부족`;
+    };
+
+    window.deleteItem = async (id) => { if (confirm('정말 삭제하시겠습니까?')) await deleteDoc(doc(db, 'uiwang_v10', id)); };
+    
+    function loadData() {
+      onSnapshot(query(collection(db, 'uiwang_v10')), (snap) => {
+        gMonthlyItems = []; gSchedules = []; gAssets = []; gHistory = [];
+        let avail = 0, tied = 0, loan = 0;
+        snap.forEach(s => {
+          const d = s.data(); d.id = s.id;
+          if (d.docType === 'monthly') gMonthlyItems.push(d);
+          else if (d.docType === 'asset') {
+            gAssets.push(d);
+            const b = d.behavior || 'avail';
+            if (b === 'avail') avail += (d.amount || 0); 
+            else if (b === 'tied') tied += (d.amount || 0); 
+            else if (b === 'loan' || b === 'short_loan') loan += (d.amount || 0);
+          } 
+          else if (d.docType === 'schedule') gSchedules.push(d);
+          else if (d.docType === 'history') gHistory.push(d);
+        });
+        
+        gAvailable = avail; gNetWorth = avail + tied - loan;
+        
+        const nwEl = document.getElementById('board-networth');
+        const avEl = document.getElementById('board-available');
+        if(nwEl) nwEl.innerText = won(gNetWorth); 
+        if(avEl) avEl.innerText = won(gAvailable);
+        
+        updateLinkedAssetDropdown(); 
+        window.renderAssetTables(); 
+        window.renderMonthlyTables(); 
+        window.renderHistoryTable();
+        renderSchedules(); 
+        window.drawChart(); 
+        window.updateSortIcons();
+      });
+    }
+
+    document.getElementById('btn-login').addEventListener('click', () => signInWithPopup(auth, new GoogleAuthProvider()));
+    document.getElementById('btn-logout').addEventListener('click', () => signOut(auth));
+    const ALLOWED_EMAILS = ["jjhwang1016@gmail.com", "mjjjj10166@gmail.com"];
+    onAuthStateChanged(auth, (user) => {
+      if (user && !ALLOWED_EMAILS.includes(user.email)) { signOut(auth); return alert("권한이 없는 계정입니다."); }
+      document.getElementById('login-screen').classList.toggle('hidden', !!user); document.getElementById('main-app').classList.toggle('hidden', !user);
+      if (user) loadData();
+    });
+    
+    document.addEventListener('input', (e) => { 
+      if (e.target.classList.contains('comma-input')) { 
+        let v = e.target.value.replace(/[^0-9]/g, ''); 
+        e.target.value = v ? KRW.format(v) : ''; 
+      } 
+    });
+  </script>
+</body>
+</html>
